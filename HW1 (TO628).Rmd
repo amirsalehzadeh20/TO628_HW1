@@ -48,104 +48,200 @@ length(levels(nyc$carrier))
 ```{r}
 #How many flights there were by the airline with code OO? (Hint: nrow can be useful here along with logical indexing)
 
-length(which(nyc$carrier=='OO'))
+length(which(nyc$carrier =='OO'))
 ```
 
+- Shortest flight is 17 minutes
 ```{r}
 #How long is the shortest flight out of any NYC airport? (Hint: `min` can be useful, remember to handle `NA` values)
-```
-
-
-
-
-
-
-
-
-
-
-
-```{r}
 min(nyc$distance, na.rm=TRUE)
 summary(nyc$distance)
+
 ```
 
-
-- How many flights where there by United Airlines (code: UA) on Jan 12th 2013?
+- There were 112 United Airlines flights on Jan 12th, 2013.
 ```{r}
+#How many flights where there by United Airlines (code: UA) on Jan 12th 2013?
 nycUA <- nyc[nyc$carrier =="UA" & nyc$year=="2013" & nyc$month==1 & nyc$day ==12, ]
 nrow(nycUA)
 ```
 
+## Arrival Delay
 
-### Arrival Delay
-
-Lets focus on Arrival Delay.
-
-- What was the average arrival delay for all airports and all airlines combined in Jan 2013? 
-
+- The average arrival delay for all airports combined in Jan 2013 was 6.13 minutes.
 ```{r}
+#What was the average arrival delay for all airports and all airlines combined in Jan 2013?
 round(mean(nyc$arr_delay[nyc$month==1], na.rm=TRUE), 2)
 ```
 
-
-- Whats was the median arrival delay for all airports and all airlines combined in Jan 2013?
-
+- The median arrival delay for all airports and airlines in Jan 2013 was -3 minutes.
 ```{r}
+#Whats was the median arrival delay for all airports and all airlines combined in Jan 2013
 summary(nyc$arr_delay[nyc$month==1])
 ```
 
+- Median is negative which likely means that more flights arrive early than late. 
 
-Based on your answers to the two questions above, what can you say about the distribution of arrival delays? Provide your answer in a text paragraph form.
+## Airline Performance
 
-The median arrival is negative because flights typically arrived early. 
+- Average arrival delays by airline 
+```{r}
+#Average arrival delay by airline
+str(nyc$carrier)
+meanDelayairlines <- tapply(nyc$arr_delay, nyc$carrier, mean, na.rm=TRUE)
+str(meanDelayairlines)
+sort(round(meanDelayairlines, 1))
+max(meanDelayairlines)
+min(meanDelayairlines)
+#order
+meanDelayairlines <- meanDelayairlines[order(meanDelayairlines, decreasing =TRUE)]
+round(meanDelayairlines,2)
+
+```
+
+- Bar Plot of Average Arrival Delays for all the Airlines
+```{r}
+#Draw a bar plot of average arrival delays for all the airlines
+barplot(meanDelayairlines, xlab = "Carrier", ylab="Mean Arrival Delay (min)", main = "Average Arrival Delay by Airline")
+```
+
+- Airline `F9` has the highest average arrival delay (21.92 minutes). Airline `AS` has the smallest average arrival delay (-9.93 minutes), meaning `AS` flights arrive early, on average. `HA` also has a negative mean arrival delay. `AA` is the airline that has the smallest, positive average arrival delay (.36 minutes).
+
+## Air Gain
+
+a) Air gain is the difference between the departure delay and the arrival delay of a flight.
+```{r}
+#Create the column
+nyc$airGain <- (nyc$dep_delay - nyc$arr_delay)
+#Descriptive stats
+str(nyc$airGain)
+summary(nyc$airGain)
+#Airgain by airline
+meanAirGain <- tapply(nyc$airGain, nyc$carrier, mean, na.rm=TRUE)
+str(meanAirGain)
+meanAirGain<- sort(meanAirGain, decreasing=TRUE)
+meanAirGain <- meanAirGain[order(meanAirGain, decreasing =TRUE)]
+round(meanAirGain,2)
+#Barplot
+barplot(meanAirGain, xlab = "Carrier", ylab="Mean Air Gain (min)", main = "Average Air Gain by Airline")
+
+```
+
+b) All of the listed airlines except for F9, FL, and MQ had positive mean airgains meaning that, on average, their flights gain time in air. Across all airlines, the mean airgain was 5.66 minutes. DL, WN, AA, UA, 9E, VX, HA, and AS all have higher than average airgain. Meanwhile, F9, FL, and MQ actually have a negative airgain and lose time in air.
+
+## Merging Data Frames
+
+a) Data cleaning
+```{r}
+planes <- read.csv("planes.csv")
+str(planes)
+planes$X <- NULL
+planes$year <- as.factor(planes$year)
+planes$type <- as.factor(planes$type)
+planes$manufacturer <- as.factor(planes$manufacturer)
+planes$engine <- as.factor(planes$engine)
+```
+
+b) Merging `nycflights` and `planes` data using the common column named `tailnum`.
+```{r}
+str(nyc)
+merged <- merge(nyc, planes, 'tailnum')
+str(merged)
+```
+
+c) Pose five interesting questions and answer them.
+
+### Q1
+**1. What is the best engine type for cross-country flights (or longer)?** To judge the "best" engine type, I measured arrival delay (as a passenger, that's what I care most about). Thus, the flights with the lowest arrival delay have the "best" engine in my opinion. First, I created a subset of the merged dataset, which only included flights of 3000 miles or more. There were 711 cross-country or longer flights, and about half of them use turbo-fan engines and the other ~half use turbo-jet engines. Then, I created a barplot to show the average arrival delay by the engine type. In summary, the flights using turbo-jet engines had a 3.77 minute mean delay, whereas the flights using turbo-fan engines had a -6.92 minute delay. This data suggests that turbo-fan engines are the best choice for cross-country flights, if the metric of success is arrival delay.
+```{r}
+#Create a sample with only 'long' flights (3000 miles or more)
+longFlights <- merged[merged$distance>=3000, ]
+nrow(longFlights)
+summary(longFlights$distance)
+summary(longFlights$engine)
+str(longFlights)
+meanDelay <- tapply(longFlights$arr_delay, longFlights$engine, mean, na.rm=TRUE)
+meanDelay<- round(meanDelay[order(meanDelay, decreasing=TRUE)], 2)
+meanDelay
+#Barplot
+barplot(meanDelay, xlab = "Engine Type", ylab="Mean Arrival Delay (min)", main = "Average Arrival Delay by Engine Type for Cross-Country and Longer Flights")
+```
+
+### Q2
+**2. What time of day is best for traveling from NYC to DTW?** Morning flights from LGA to DTW are the best, with an average arrival surplus of -8. 
+```{r}
+#Create and populate a flight time of day column
+merged$flightTime <- 'unassigned'
+merged$flightTime <- ifelse(is.na(merged$sched_dep_time), 'NA',
+                         ifelse(merged$sched_dep_time>=2000, 'night',
+                                ifelse(merged$sched_dep_time>=1600, 'evening',
+                                ifelse(merged$sched_dep_time>=1200, 'afternoon',
+                                       ifelse(merged$sched_dep_time>=400, 'morning',
+                                       'night')))))
+merged$flightTime <-as.factor(merged$flightTime)
+summary(merged$flightTime)
+  
+
+#choose the subset of flights with destination "DTW"
+nycDTW <- merged[merged$dest=='DTW',]
+
+#get mean arrival delay by time of day
+#barplot of arrival delay by flight time, ideally broken down aka stacked by origin
+aggregate(arr_delay ~ flightTime, data=nycDTW, mean)
+flightDelay.Time <- aggregate(arr_delay ~ flightTime, data=nycDTW, mean)
+flightDelay.Time <- flightDelay.Time[order(flightDelay.Time$arr_delay),]
+flightDelay.Time[1,]
+barplot(flightDelay.Time$arr_delay, axes=TRUE, xlab="Flight Scheduled Departure Time of Day", ylab="Mean Arrival Delay", main="NYC to DTW: Mean Arrival Delay by Flight Time of Day", names.arg=c("morning", "afternoon", "evening", "night"))
+aggregate(arr_delay ~ origin + flightTime, data=nycDTW, mean)
+
+flightDelay.Time.Origin <- aggregate(arr_delay ~ origin + flightTime, data=nycDTW, mean)
+flightDelay.Time.Origin <- flightDelay.Time.Origin[order(flightDelay.Time.Origin$arr_delay),]
+flightDelay.Time.Origin[1,]
 
 
-### Airline Performance
+```
 
-Lets see if all airlines are equally terrible as far as flight arrival delays are concerned. For this question you will have to make sure that airline column is coded as a factor.
+### Q3
+**3. What time of year is best for travel out of NYC airports? During that time of year, which departure airport is best?** Again, as a passenger, I care most about arrival delays. I am thus using `arr_delay` as the metric of success. First, I aggregated delay data by month, and found that February (month=`9`) is the month with the shortest average arrival delay. Indeed, on average, flights from NYC in September arrive 4.16 minutes early. Then, I dove into September flights, sorted by origin airport. By plotting the average arrival delay by origin, I can see that flights arrive 4.82 minutes early (on average) when leaving from EWR and 4.89 minutes early (on average) when leaving from JFK, and 2.45 minutes early( on average) when leaving from LGA. Thus, for someone who cares most about efficient travel (as is measured by arrival delays), I would want to travel from JFK in September.
 
-- Calculate average arrival delays by airline (Hint: look up the command `tapply`)
+```{r}
+meanDelaybyMonth <- tapply(merged$arr_delay, merged$month, mean, na.rm=TRUE)
+meanDelaybyMonth<- round(meanDelaybyMonth[order(meanDelaybyMonth, decreasing=TRUE)], 2)
+meanDelaybyMonth
 
-- Draw a Bar Plot of Average Arrival Delays for all the Airlines (Hint: command for making a Bar Plot is simply `barplot`)
+delayByOrigin <- tapply(merged$arr_delay[merged$month==9], merged$origin[merged$month==9], mean, na.rm=TRUE)
+summary(merged$origin[merged$month==9])
+barplot(delayByOrigin, xlab = "Origin Ariport", ylab="Mean Arrival Delay (min)", main = "Average Arrival Delay by Origin Airport for February Flights")
+round(delayByOrigin,2)
 
-- Which airline has the highest average arrival delay? Which airline has the smallest average arrival delay? Are there airlines that actually have negative average delay? Provide answer to this question in a text paragraph form using **inline R code**.
+```
 
-### Air Gain
+### Q4
+**4. Which manufacturers fly the greatest and least distances?** To learn which manufacturers fly the greatest and least distances, I first created a sum of distance traveled grouped by manufacturer. Then, in exploring this data, I can see that Boeing has flown the greatest distance by far (129780208 miles), followed by Airbus (67644103 miles), and then Airbus Industrie (40117602 miles). On the other side of the spectrum, Avions Marcel Dassault flew the fewest miles (2176 miles). This data could be important for carriers who are looking to strike deals with manufacturers, employees deciding where to work, or strategy teams in deciding where to focus aviation investments.
+```{r}
+summary(merged$manufacturer)
+sumDistbyManufacturer <- tapply(merged$distance, merged$manufacturer, sum, na.rm=TRUE)
+sumDistbyManufacturer<- round(sumDistbyManufacturer[order(sumDistbyManufacturer, decreasing=TRUE)], 2)
+sumDistbyManufacturer
 
-Create a new column named airgain such that airgain = (departure delay - arrival delay) : this is the amount of delay a flight made up while in air.
+barplot(sumDistbyManufacturer, xlab = "Manufacturer", ylab="Total Distance Flown (miles)", main = "Distance Flown by Manufacturer")
+head(sumDistbyManufacturer)
+tail(sumDistbyManufacturer)
 
-a) Explore airgain data - calculate suitable descriptive statistics and appropriate graphics to better understand this data. This part is open ended - you do what you feel works best for you.
+```
 
-b) Answer the questions:
+### Q5
+**5. Which manufacturers do the biggest carriers use?** First, I identified the biggest carriers (as those with most flights) to be UA, EV, B6, and DL, in that order. Then, I examined which manufacturers those airlines used. I found that Boeing is the most frequently used manufacturer across the biggest carriers. Conversely, McDonnel Douglas is used by the biggest carriers, but is used the least frequently (141 flights). This could have business implications for carriers and manufacturers alike.
+```{r}
+summary(merged$carrier)
 
-  - do airlines actually gain any time when in air on average? 
+bigcarriers <- merged[merged$carrier=='UA' | merged$carrier=='EV' | merged$carrier=='B6' | merged$carrier=='DL', ]
+summary(bigcarriers)
 
-  - Calculate average airgain for different airlines - which airlines do a better job, which do a worse job? 
+summary(bigcarriers$manufacturer)
+table <- table(bigcarriers$manufacturer)
+table
+max(table)
+min(table)
 
-### Merging Data Frames
-
-> This section and the next is new compared to the class exercise. As you had an opportunity to work together in your breakout rooms for previous questions, this and the next section will carry a higher weight in grading for this HW.
-
-You can get detailed information about the physical planes in our dataset in this file: `planes.csv`. Download and save this file in your project directory.
-
-a) Read the `planes.csv` file using `read.csv` command. Do any data cleaning necessary.
-
-b) Merge the flights data and the planes data using the `merge` command. You should do the merge on the common column named `tailnum`. *getting this right may need some trial and error and getting some help*.
-
-c) Now that you have a merged dataset, think of what interesting questions that you can ask that can be answered using the merged dataset. You are asked to pose five interesting questions and answer them. (For example: who are the top 10 manufacturers of planes that fly out of NYC airports?) **Be creative. Be bold. Ask questions that you would want to know answers to even if you were not doing this for a HW. **
-
-### Making Your HTML Look Nice
-
-We want our report to be good looking, professional documents. To that end, I am asking you to do the following:
-
-- Have a floating table of contents
-
-- Include code folding in your output. You can find more about code folding here: https://bookdown.org/yihui/rmarkdown/html-document.html#code-folding
-
-
-That's it. Once you are done, make sure everything works and knits well and then you can push your changes to the GitHub repo and uplaod the RMD flile and the html output to Canvas.
-
-**Have Fun!**
-
-Sanjeev
+```
